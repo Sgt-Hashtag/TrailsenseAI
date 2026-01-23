@@ -10,8 +10,10 @@ A small FastAPI service that:
   - POST /v1/search (LLM prompt -> structured intent -> route)
 
 I guess osmnx creates a DiGraph so i converted the data structure to exctract the length
+<img width="1506" height="978" src="Screenshot from 2026-01-23 11-27-23.png" />
 
-
+demo.py
+img
 ## Run locally
 
 ```bash

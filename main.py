@@ -79,7 +79,7 @@ class ParsedIntent(BaseModel):
     terrain: str = Field(description="The preferred terrain style")
     location: str = Field(description="The specific city or area")
 
-GEMINI_API_KEY = "AIzaSyCvfB_C2qA2QD4D78Mc6YnYBth8b8gGxPI"
+GEMINI_API_KEY = "Your ApI key"
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 def parse_athlete_input(user_input: str) -> ParsedIntent:

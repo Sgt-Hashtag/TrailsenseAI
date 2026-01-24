@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import folium
 from streamlit_folium import st_folium
+from streamlit_folium import folium_static
 
 # Configure the page to look like Strava
 st.set_page_config(page_title="TrailSense AI | Route Discovery", page_icon="🏃‍♂️", layout="wide")
@@ -62,7 +63,7 @@ with tab1:
                     response = requests.post(
                         f"{api_url}/v1/search", 
                         json={"prompt": prompt},
-                        timeout=30
+                        timeout=80
                     )
                     
                     if response.status_code == 200:
@@ -152,7 +153,7 @@ with tab1:
         ).add_to(m)
 
         # Display map
-        st_folium(m, width=None, height=500, use_container_width=True, returned_objects=[])
+        folium_static(m, width=None, height=500)
         
         # Show raw coordinates in expander
         with st.expander("📍 View Route Details"):
@@ -258,7 +259,7 @@ with tab2:
         folium.Marker(coords[0], tooltip="Start", icon=folium.Icon(color="green")).add_to(m)
         folium.Marker(coords[-1], tooltip="End", icon=folium.Icon(color="red")).add_to(m)
 
-        st_folium(m, width=None, height=500, use_container_width=True, returned_objects=[])
+        folium_static(m, width=None, height=500, use_container_width=True, returned_objects=[])
 
 # Footer
 st.markdown("---")

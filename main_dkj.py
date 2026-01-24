@@ -18,14 +18,13 @@ import math
 
 load_dotenv()
 
-# --- Configuration ---
+# config
 DEFAULT_LOCATION = "Berlin, Germany"
 
 def get_location_hash(location: str) -> str:
     """Generate a unique hash for a location string."""
     return hashlib.md5(location.encode()).hexdigest()[:12]
 
-# --- ML Model ---
 class SuitabilityModel:
     def __init__(self, model_path: str = "trailsense_model.pkl"):
         self.model_path = model_path
@@ -79,7 +78,6 @@ class SuitabilityModel:
         scores_dict = dict(zip(df.index, costs))
         return scores_dict
 
-# --- Gemini Parser ---
 class ParsedIntent(BaseModel):
     distance_km: float = Field(description="The requested distance in kilometers")
     activity: str = Field(description="The type of activity (run, cycle, etc)")
@@ -92,7 +90,7 @@ client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 def parse_athlete_input(user_input: str) -> ParsedIntent:
     """Parse natural language input into structured intent."""
     if not client:
-        print("Gemini API key not found, using default intent")
+        print("!! Gemini API key not found, using default intent")
         return ParsedIntent(distance_km=5.0, activity="run", terrain="balanced", location="Berlin")
     
     prompt = f"""
@@ -110,13 +108,12 @@ JSON:
         raw = json.loads(resp.text)
         return ParsedIntent(**raw)
     except (json.JSONDecodeError, ValidationError) as e:
-        print(f"JSON parsing error: {e}")
+        print(f"!! JSON parsing error: {e}")
         return ParsedIntent(distance_km=5.0, activity="run", terrain="balanced", location="Berlin")
     except Exception as e:
-        print(f"Gemini API error: {e}")
+        print(f"!! Gemini API error: {e}")
         return ParsedIntent(distance_km=5.0, activity="run", terrain="balanced", location="Berlin")
 
-# --- FastAPI App ---
 resources = {}
 
 @asynccontextmanager
@@ -124,96 +121,59 @@ async def lifespan(app: FastAPI):
     print("Initializing SuitabilityModel...")
     ml_engine = SuitabilityModel("trailsense_model.pkl")
     
-    # Determine location
     location = os.getenv("TRAILSENSE_LOCATION", DEFAULT_LOCATION)
     location_hash = get_location_hash(location)
     
-    print(f"Target location: {location}")
-    print(f"Location hash: {location_hash}")
-    
-    # Cache
     cache_dir = "graph_cache"
     os.makedirs(cache_dir, exist_ok=True)
     
-    cache_file_pkl = os.path.join(cache_dir, f"graph_{location_hash}.pkl")
+    enriched_cache_file = os.path.join(cache_dir, f"graph_{location_hash}_enriched.pkl")
     metadata_file = os.path.join(cache_dir, f"metadata_{location_hash}.json")
     
-    cache_file = cache_file_pkl
-    
-    print(f"Cache directory: {os.path.abspath(cache_dir)}")
-    print(f"Looking for: {os.path.basename(cache_file)}")
-    
-    # load from cache
     G = None
-    if os.path.exists(cache_file) and os.path.exists(metadata_file):
+
+    if os.path.exists(enriched_cache_file):
         try:
-            print(f"📦 Cache files found, loading...")
-            
-            with open(metadata_file, 'r') as f:
-                metadata = json.load(f)
-            
-            if metadata.get('location') == location:
-                with open(cache_file, 'rb') as f:
-                    G = pickle.load(f)
-                print(f"Loaded from cache: {len(G.nodes):,} nodes, {len(G.edges):,} edges")
-                print(f"Cached on: {metadata.get('cached_at', 'unknown')}")
-            else:
-                print(f"Location mismatch in cache")
+            print(f"Enriched cache found. Loading pre-computed ML scores...")
+            with open(enriched_cache_file, 'rb') as f:
+                G = pickle.load(f)
+            print(f"Ready immediately: {len(G.nodes):,} nodes enriched.")
         except Exception as e:
-            print(f"Cache load failed: {e}")
-            G = None
-    else:
-        print(f"No cache found, will download from OSM")
-    
-    # Download and cache if needed
+            print(f"Failed to load enriched cache: {e}")
+
     if G is None:
-        print(f"Downloading '{location}' from OpenStreetMap (2-5 min)...")
+        print("Enriched cache miss. Building graph and computing scores...")
         
-        ox.settings.use_cache = True
-        ox.settings.log_console = False
-        
-        try:
+        raw_cache_file = os.path.join(cache_dir, f"graph_{location_hash}.pkl")
+        if os.path.exists(raw_cache_file):
+            print("Loading raw graph from cache...")
+            with open(raw_cache_file, 'rb') as f:
+                G = pickle.load(f)
+        else:
+            print(f"Downloading '{location}' from OpenStreetMap...")
             G_full = ox.graph_from_place(location, network_type="walk")
-        except Exception as e:
-            raise RuntimeError(f"Failed to download graph: {e}")
+            largest_cc = max(nx.weakly_connected_components(G_full), key=len)
+            G = G_full.subgraph(largest_cc).copy()
         
-        largest_cc = max(nx.weakly_connected_components(G_full), key=len)
-        G = G_full.subgraph(largest_cc).copy()
+        print("Computing ML suitability scores (one-time cost)...")
+        edges_gdf = ox.graph_to_gdfs(G, nodes=False)
+        scores = ml_engine.predict_weights_batch(edges_gdf)
+        nx.set_edge_attributes(G, scores, 'athlete_score')
         
-        print(f"Trimmed to largest component: {len(G.nodes):,} nodes")
-        
-        # Save to cache
-        print(f"Saving to cache...")
-        try:
-            with open(cache_file, 'wb') as f:
-                pickle.dump(G, f)
+        print("Saving enriched graph to cache for instant future reloads...")
+        with open(enriched_cache_file, 'wb') as f:
+            pickle.dump(G, f)
             
-            file_size = os.path.getsize(cache_file) / (1024 * 1024)
-            print(f"Graph cached ({file_size:.1f} MB)")
-            
-            metadata = {
-                "location": location,
-                "location_hash": location_hash,
-                "nodes": len(G.nodes),
-                "edges": len(G.edges),
-                "cached_at": datetime.utcnow().isoformat(),
-                "network_type": "walk"
-            }
-            with open(metadata_file, 'w') as f:
-                json.dump(metadata, f, indent=2)
-            print(f"Metadata saved")
-            
-        except Exception as e:
-            print(f"Failed to save cache: {e}")
-    
-    # Compute ML scores
-    print("Computing ML suitability scores...")
-    edges_gdf = ox.graph_to_gdfs(G, nodes=False)
-    scores = ml_engine.predict_weights_batch(edges_gdf)
-    nx.set_edge_attributes(G, scores, 'athlete_score')
-    
-    print(f"Ready: {len(G.nodes):,} nodes | {len(G.edges):,} edges")
-    
+        metadata = {
+            "location": location,
+            "nodes": len(G.nodes),
+            "edges": len(G.edges),
+            "cached_at": datetime.utcnow().isoformat(),
+            "enriched": True
+        }
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata, f, indent=2)
+
     resources["graph"] = G
     resources["location"] = location
     yield
@@ -300,55 +260,49 @@ async def create_route(req: RouteRequest):
     )
 
 def find_target_node_at_distance(G, start_lat, start_lon, target_km, weight='length'):
-    """Find a node creating a round trip close to target_km."""
+    """
+    Optimized turnaround node selection.
+    Uses Euclidean filtering to prevent frontend timeouts.
+    """
     start_node = ox.distance.nearest_nodes(G, start_lon, start_lat)
+    candidates = []
     
-    best_node = None
-    best_error = float('inf')
-    
-    # different radii and bearings
-    for radius_factor in [0.6, 0.7, 0.5, 0.8]:
-        offset_deg = (target_km / 2 * radius_factor) / 111.0
+    for radius_factor in [0.7, 0.8, 0.9]: 
+        dist_offset = (target_km / 2 * radius_factor) / 111.0
         
-        for bearing_deg in [45, 135, 225, 315, 0, 90, 180, 270]:
-            bearing_rad = math.radians(bearing_deg)
-            lat = start_lat + offset_deg * math.cos(bearing_rad)
-            lon = start_lon + offset_deg * math.sin(bearing_rad) / math.cos(math.radians(start_lat))
+        for bearing in [0, 45, 90, 135, 180, 225, 270, 315]:
+            rad = math.radians(bearing)
+            lat = start_lat + dist_offset * math.cos(rad)
+            lon = start_lon + dist_offset * math.sin(rad) / math.cos(math.radians(start_lat))
             
-            try:
-                candidate = ox.distance.nearest_nodes(G, lon, lat)
-                
-                if candidate == start_node or G.degree(candidate) == 0:
-                    continue
-                
-                # actual round-trip distance
-                try:
-                    out = nx.shortest_path(G, start_node, candidate, weight=weight)
-                    back = nx.shortest_path(G, candidate, start_node, weight=weight)
-                    full = out + back[1:]
-                    
-                    actual_km = calculate_route_distance(G, full) / 1000
-                    error = abs(actual_km - target_km)
-                    
-                    if error < best_error:
-                        best_error = error
-                        best_node = candidate
-                        
-                        if error / target_km < 0.1:  # Within 10%
-                            print(f"Match: {actual_km:.1f}km (target: {target_km}km)")
-                            return best_node
-                except:
-                    pass
-            except:
-                pass
-    
-    if best_node:
-        print(f"Best match: ~{target_km - best_error:.1f}km")
-        return best_node
-    
-    # Fallback
-    neighbors = list(G.neighbors(start_node))
-    return neighbors[0] if neighbors else start_node
+            node = ox.distance.nearest_nodes(G, lon, lat)
+            if node != start_node and G.degree(node) > 1:
+                candidates.append(node)
+
+    unique_candidates = list(set(candidates))
+
+    best_node = unique_candidates[0] if unique_candidates else start_node
+    best_error = float('inf')
+
+    for node in unique_candidates[:5]: 
+        try:
+            route_out = nx.shortest_path(G, start_node, node, weight=weight)
+            d_out = calculate_route_distance(G, route_out)
+            estimated_total_km = (d_out * 2) / 1000 
+            
+            error = abs(estimated_total_km - target_km)
+            
+            if error < best_error:
+                best_error = error
+                best_node = node
+            
+            if error < 0.5:
+                print(f"Fast match found: {estimated_total_km:.2f}km")
+                break
+        except:
+            continue
+            
+    return best_node
 
 def get_location_coords_hybrid(location: str, G=None):
     """Resolve location to coordinates."""
@@ -369,13 +323,10 @@ def get_location_coords_hybrid(location: str, G=None):
             print(f"Static hit: {name}")
             return coords
     
-    # OSMnx geocoding
     try:
         gdf = ox.geocode_to_gdf(f"{location}, Berlin, Germany")
-        # using bounds
-        bounds = gdf.total_bounds  # [minx, miny, maxx, maxy]
-        lat = (bounds[1] + bounds[3]) / 2  # Average of min and max y
-        lon = (bounds[0] + bounds[2]) / 2  # Average of min and max x
+        lat = gdf.geometry.centroid.y.iloc[0]
+        lon = gdf.geometry.centroid.x.iloc[0]
         
         if G:
             node = ox.distance.nearest_nodes(G, lon, lat)
@@ -384,7 +335,6 @@ def get_location_coords_hybrid(location: str, G=None):
     except:
         pass
     
-    # Fallback to Mitte
     return (52.5213, 13.4125)
 
 @app.post("/v1/search", response_model=RouteResponse)
@@ -403,7 +353,7 @@ async def search_ai_route(req: SearchRequest):
     
     dest_node = find_target_node_at_distance(G, start_lat, start_lon, intent.distance_km, weight)
     
-    if intent.terrain not in ["balanced", "trail", "hilly", "flat"]:
+    if intent.terrain not in ["balanced", "hilly", "trail", "flat"]:
         intent.terrain = "balanced"
     
     print(f"Intent: {intent.distance_km}km '{intent.terrain}' in '{intent.location}'")

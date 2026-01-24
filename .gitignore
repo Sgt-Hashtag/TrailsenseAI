@@ -1,1 +1,6 @@
 cache/
+.env
+graph_cache/
+__pycache__/
+*.pkl
+*.pyc

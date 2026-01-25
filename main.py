@@ -86,8 +86,8 @@ class ParsedIntent(BaseModel):
     terrain: str = Field(description="The preferred terrain style")
     location: str = Field(description="The specific city or area")
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+GEMINI_API_KEY = "Your ApI key"
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 def parse_athlete_input(user_input: str) -> ParsedIntent:
     """Parse natural language input into structured intent."""

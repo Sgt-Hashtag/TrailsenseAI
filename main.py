@@ -86,8 +86,8 @@ class ParsedIntent(BaseModel):
     terrain: str = Field(description="The preferred terrain style")
     location: str = Field(description="The specific city or area")
 
-GEMINI_API_KEY = "Your ApI key"
-client = genai.Client(api_key=GEMINI_API_KEY)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 def parse_athlete_input(user_input: str) -> ParsedIntent:
     """Parse natural language input into structured intent."""
@@ -101,9 +101,10 @@ Return ONLY valid JSON with these exact keys: distance_km, activity, terrain, lo
 User request: {user_input}
 JSON:
 """
+# Ideally can use any LLM or tool to parse the user input into structured data. would have opted for ollam or even a SLM here but Gemini is easiest to demo with.
     try:
         resp = client.models.generate_content(
-            model="models/gemini-2.5-flash-lite",
+            model="models/gemini-2.5-flash",
             contents=prompt,
             config=genai.types.GenerateContentConfig(response_mime_type="application/json")
         )
@@ -147,7 +148,7 @@ async def lifespan(app: FastAPI):
     G = None
     if os.path.exists(cache_file) and os.path.exists(metadata_file):
         try:
-            print(f"📦 Cache files found, loading...")
+            print(f"Cache files found, loading...")
             
             with open(metadata_file, 'r') as f:
                 metadata = json.load(f)

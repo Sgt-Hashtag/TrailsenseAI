@@ -25,13 +25,13 @@ with st.sidebar:
     # try:
     #     health = requests.get(f"{api_url}/health", timeout=2).json()
     #     if health.get('status') == 'online':
-    #         st.success(f"✅ API Online")
+    #         st.success(f"API Online")
     #         st.caption(f"Nodes: {health.get('nodes', 0):,}")
     #         st.caption(f"Edges: {health.get('edges', 0):,}")
     #     else:
-    #         st.warning("⚠️ API responding but not ready")
+    #         st.warning("API responding but not ready")
     # except:
-    #     st.error("❌ API Offline")
+    #     st.error("API Offline")
     
     st.divider()
     st.info(" This demo uses Gemini 2.5 Flash + Random Forest ML Model")

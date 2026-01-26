@@ -34,7 +34,7 @@ with st.sidebar:
     #     st.error("❌ API Offline")
     
     st.divider()
-    st.info("💡 This demo uses Gemini 2.5 Flash + Random Forest ML Model")
+    st.info(" This demo uses Gemini 2.5 Flash + Random Forest ML Model")
     
     st.markdown("### Example Prompts")
     st.code("5km run in Tiergarten", language=None)
@@ -42,7 +42,7 @@ with st.sidebar:
     st.code("10km cycle around Charlottenburg", language=None)
 
 # Main content - two tabs
-tab1, tab2 = st.tabs(["🔍 AI Search", "🎯 Manual Route"])
+tab1, tab2 = st.tabs([" AI Search", " Manual Route"])
 
 # TAB 1: AI-powered search
 with tab1:
@@ -53,11 +53,11 @@ with tab1:
         key="ai_prompt"
     )
 
-    if st.button("🚀 Generate Route", type="primary", key="ai_generate"):
+    if st.button(" Generate Route", type="primary", key="ai_generate"):
         if not prompt:
             st.warning("Please enter a route description!")
         else:
-            with st.spinner("🤖 AI is analyzing terrain and finding the best path..."):
+            with st.spinner(" AI is analyzing terrain and finding the best path..."):
                 try:
                     # Call /v1/search endpoint
                     response = requests.post(
@@ -71,24 +71,24 @@ with tab1:
                         
                         # Validate that we have geometry data
                         if not data.get('geometry') or len(data['geometry']) < 2:
-                            st.error("⚠️ Route generated but no valid path found. Try a different location or distance.")
+                            st.error(" Route generated but no valid path found. Try a different location or distance.")
                             st.session_state.route_data = None
                         else:
                             # Store in session state
                             st.session_state.route_data = data
                         
                     else:
-                        st.error(f"❌ API Error ({response.status_code}): {response.text}")
+                        st.error(f" API Error ({response.status_code}): {response.text}")
                         st.session_state.route_data = None
 
                 except requests.exceptions.Timeout:
-                    st.error("⏱️ Request timed out. Try a shorter route or check if the API is running.")
+                    st.error(" Request timed out. Try a shorter route or check if the API is running.")
                     st.session_state.route_data = None
                 except requests.exceptions.ConnectionError:
-                    st.error("🔌 Cannot connect to API. Make sure FastAPI is running on " + api_url)
+                    st.error(" Cannot connect to API. Make sure FastAPI is running on " + api_url)
                     st.session_state.route_data = None
                 except Exception as e:
-                    st.error(f"❌ Unexpected error: {str(e)}")
+                    st.error(f" Unexpected error: {str(e)}")
                     st.session_state.route_data = None
     
     # Display route if it exists in session state
@@ -111,14 +111,14 @@ with tab1:
         col4.metric("Terrain", terrain_label)
 
         # Render the Map
-        st.markdown("#### 🗺️ Your Optimized Route")
+        st.markdown("####  Your Optimized Route")
         
         # Show route type badge
         route_type = data.get('route_type', 'unknown')
         if route_type == 'round_trip':
-            st.info("🔄 **Round Trip Route** - Returns to starting point")
+            st.info(" **Round Trip Route** - Returns to starting point")
         elif route_type == 'point_to_point':
-            st.info("➡️ **Point-to-Point Route** - One-way journey")
+            st.info(" **Point-to-Point Route** - One-way journey")
         
         # Create a Folium map centered on the start point
         center_lat = sum(c[0] for c in coords) / len(coords)
@@ -210,7 +210,7 @@ with tab2:
                     
                     # Validate geometry
                     if not data.get('geometry') or len(data['geometry']) < 2:
-                        st.error("⚠️ No valid route found between these points.")
+                        st.error(" No valid route found between these points.")
                         st.session_state.manual_route_data = None
                     else:
                         # Store in session state

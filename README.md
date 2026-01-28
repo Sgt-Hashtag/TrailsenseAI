@@ -18,6 +18,7 @@ TrailSense AI is a high-performance routing service that translates natural lang
 * **Model:** `RandomForestRegressor` trained on simulated athlete preferences (Incline, Surface Type, Greenery).
 * **Vectorized Inference:** Instead of iterative edge processing, the engine utilizes **batch inference** on GeoPandas DataFrames. This reduces cold-start enrichment time by ~85%, critical for scaling to dense urban graphs like Berlin (400k+ nodes).
 * **Custom Cost Function:** $$\text{Edge Weight} = \text{Length} \times \left( \frac{1}{\text{ML Popularity Score} + 0.1} \right)$$
+* Fixed model to address initial $R^2$ score (-0.6111) 
 
 ### 3. **Geospatial Engineering**
 * **CRS Alignment:** Implemented a Coordinate Reference System (CRS) transformer using `pyproj` to align WGS84 API inputs with UTM-projected graph math.

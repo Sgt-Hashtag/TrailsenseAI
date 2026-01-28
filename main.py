@@ -38,16 +38,37 @@ class SuitabilityModel:
             self.train_and_save()
 
     def train_and_save(self):
-        """Expanded training data simulating athlete preferences."""
-        data = {
-            'incline': [0.01, 0.05, 0.10, 0.02, 0.08, 0.15, 0.25, 0.00, 0.03, 0.12],
-            'is_trail': [1, 0, 1, 0, 1, 1, 1, 0, 0, 1],
-            'greenery': [0.9, 0.2, 0.8, 0.1, 0.9, 1.0, 0.7, 0.0, 0.3, 0.8],
-            'popularity': [0.95, 0.4, 0.85, 0.3, 0.9, 0.7, 0.4, 0.1, 0.5, 0.8]
-        }
-        df = pd.DataFrame(data)
-        X = df[['incline', 'is_trail', 'greenery']]
-        y = df['popularity']
+        """Refined training data to match realistic athlete preferences."""
+        np.random.seed(42)
+        n_rows = 500 # More data for better generalization
+        
+        # Generate random features
+        incline = np.random.uniform(0, 0.25, n_rows)
+        is_trail = np.random.randint(0, 2, n_rows)
+        greenery = np.random.uniform(0, 1.0, n_rows)
+        
+        # Apply the logic: What do athletes ACTUALLY want?
+        # Start with baseline
+        popularity = 0.4 
+        
+        # 1. Strong preference for trails
+        popularity += is_trail * 0.3
+        
+        # 2. Strong preference for greenery
+        popularity += greenery * 0.2
+        
+        # 3. Incline "Sweet Spot" (Athletes love 5-10%, hate >15%)
+        # Using a Gaussian-like penalty for steepness
+        popularity += np.where((incline >= 0.05) & (incline <= 0.10), 0.1, 0)
+        popularity -= np.where(incline > 0.15, 0.2, 0)
+        
+        y = np.clip(popularity, 0, 1)
+        
+        X = pd.DataFrame({
+            'incline': incline,
+            'is_trail': is_trail,
+            'greenery': greenery
+        })
         
         self.model = RandomForestRegressor(n_estimators=100, random_state=42)
         self.model.fit(X, y)

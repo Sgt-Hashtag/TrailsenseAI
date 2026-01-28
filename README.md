@@ -4,7 +4,7 @@
 TrailSense AI is a high-performance routing service that translates natural language athlete intent into ML-optimized geospatial paths. Built as a proof-of-concept, it demonstrates how to bridge the gap between LLM-based intent extraction and deterministic graph theory.
 
 
-<img width="1506" height="978" src="Screenshot from 2026-01-23 11-27-23.png" />
+<img width="1506" height="978" src="trailsenseai.gif" />
 ---
 
 ## 🛠️ Key Technical Features
